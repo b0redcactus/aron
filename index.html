@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Keménymag – Áron számláló</title>
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #fff;
+      color: #000;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    h1 { font-size: 22px; margin: 0 0 12px; font-weight: 700; }
+    p { margin: 8px 0 0; line-height: 1.45; }
+    .box {
+      margin-top: 18px;
+      border: 1px solid #000;
+      padding: 14px 12px;
+    }
+    .counter {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      margin-top: 8px;
+    }
+    .muted { font-size: 13px; opacity: 0.9; }
+    hr { border: 0; border-top: 1px solid #000; margin: 18px 0; }
+    label { display: block; margin: 10px 0 6px; font-weight: 600; }
+    input, button {
+      font: inherit;
+      padding: 10px 10px;
+      border: 1px solid #000;
+      border-radius: 0;
+      background: #fff;
+      color: #000;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    button { cursor: pointer; font-weight: 700; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 640px) {
+      .row { grid-template-columns: 1fr 1fr; }
+    }
+    .saved {
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px dashed #000;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+    .tiny { font-size: 12px; margin-top: 10px; }
+    a { color: #000; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Áron utoljára ekkor látta a Keménymagot:</h1>
+    <p><strong>2025. dec. 18. 15:49</strong> (Europe/Budapest)</p>
+
+    <div class="box" aria-live="polite">
+      <div class="muted">Azóta eltelt idő:</div>
+      <div class="counter" id="counter">—</div>
+      <div class="muted" id="sinceText">—</div>
+    </div>
+
+    <hr />
+
+    <h1>Voks: mikor nézi meg újra?</h1>
+    <p class="muted">
+      Add meg a neved és a tipped dátumát. Ugyanarról a böngészőről/eszközről csak egyszer lehet szavazni.
+    </p>
+
+    <div class="box">
+      <form id="voteForm">
+        <div class="row">
+          <div>
+            <label for="name">Név</label>
+            <input id="name" name="name" type="text" autocomplete="name" required maxlength="60" />
+          </div>
+          <div>
+            <label for="guess">Tipp dátuma</label>
+            <input id="guess" name="guess" type="datetime-local" required />
+          </div>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <button id="submitBtn" type="submit">Szavazok</button>
+        </div>
+
+        <div class="saved" id="savedBox" hidden></div>
+        <div class="tiny muted" id="oneVoteNote"></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // --- Countdown (from 2025-12-18 15:49 Europe/Budapest) ---
+    // December in Hungary is CET (UTC+01:00).
+    const START = new Date("2025-12-18T15:49:00+01:00");
+
+    const counterEl = document.getElementById("counter");
+    const sinceTextEl = document.getElementById("sinceText");
+
+    function pad2(n) { return String(n).padStart(2, "0"); }
+
+    function updateCounter() {
+      const now = new Date();
+      let diffMs = now - START;
+
+      // If someone opens before START (unlikely), clamp to 0.
+      if (diffMs < 0) diffMs = 0;
+
+      const totalSeconds = Math.floor(diffMs / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      counterEl.textContent = `${days} nap ${pad2(hours)} óra ${pad2(minutes)} perc ${pad2(seconds)} mp`;
+
+      // Nice "since" text
+      const fmt = new Intl.DateTimeFormat("hu-HU", {
+        dateStyle: "long",
+        timeStyle: "short",
+        timeZone: "Europe/Budapest"
+      });
+      sinceTextEl.textContent = `Kezdőidőpont: ${fmt.format(START)} (Budapest)`;
+    }
+
+    updateCounter();
+    setInterval(updateCounter, 250);
+
+    // --- Voting (1 vote per browser/device) ---
+    // Note: Static site => no server-side storage. We'll store locally.
+    const STORAGE_KEY = "kemenymag_vote_v1";
+    const COOKIE_KEY = "kemenymag_vote_v1";
+
+    const form = document.getElementById("voteForm");
+    const nameInput = document.getElementById("name");
+    const guessInput = document.getElementById("guess");
+    const submitBtn = document.getElementById("submitBtn");
+    const savedBox = document.getElementById("savedBox");
+    const oneVoteNote = document.getElementById("oneVoteNote");
+
+    function setCookie(name, value, days=3650) {
+      const d = new Date();
+      d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+      document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; expires=${d.toUTCString()}; path=/; SameSite=Lax`;
+    }
+
+    function getCookie(name) {
+      const target = encodeURIComponent(name) + "=";
+      const parts = document.cookie.split(";").map(s => s.trim());
+      for (const p of parts) {
+        if (p.startsWith(target)) return decodeURIComponent(p.slice(target.length));
+      }
+      return null;
+    }
+
+    function hasVoted() {
+      return Boolean(localStorage.getItem(STORAGE_KEY)) || Boolean(getCookie(COOKIE_KEY));
+    }
+
+    function loadVote() {
+      const raw = localStorage.getItem(STORAGE_KEY) || getCookie(COOKIE_KEY);
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+
+    function lockForm(vote) {
+      nameInput.disabled = true;
+      guessInput.disabled = true;
+      submitBtn.disabled = true;
+
+      const dt = new Date(vote.guessIso);
+      const fmt = new Intl.DateTimeFormat("hu-HU", {
+        dateStyle: "long",
+        timeStyle: "short",
+        timeZone: "Europe/Budapest"
+      });
+
+      savedBox.hidden = false;
+      savedBox.textContent =
+        `Szavazat elmentve ezen az eszközön.\n\n` +
+        `Név: ${vote.name}\n` +
+        `Tipp: ${fmt.format(dt)} (Budapest)\n` +
+        `Mentés ideje: ${new Date(vote.savedAtIso).toLocaleString("hu-HU")}`;
+
+      oneVoteNote.textContent = "Ezen a böngészőn/eszközön már leadtál egy voksot.";
+    }
+
+    // Initialize: if already voted, show it & lock.
+    const existing = loadVote();
+    if (existing && hasVoted()) {
+      lockForm(existing);
+    } else {
+      oneVoteNote.textContent = "Tippelj egyszer — utána lezárjuk a szavazást ezen az eszközön.";
+      // Default guess: today + 1 day at 18:00 (Budapest) - optional convenience
+      const now = new Date();
+      const defaultGuess = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      defaultGuess.setHours(18, 0, 0, 0);
+      // datetime-local expects local time string: YYYY-MM-DDTHH:mm
+      const yyyy = defaultGuess.getFullYear();
+      const mm = String(defaultGuess.getMonth() + 1).padStart(2, "0");
+      const dd = String(defaultGuess.getDate()).padStart(2, "0");
+      const hh = String(defaultGuess.getHours()).padStart(2, "0");
+      const mi = String(defaultGuess.getMinutes()).padStart(2, "0");
+      guessInput.value = `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      if (hasVoted()) {
+        const v = loadVote();
+        if (v) lockForm(v);
+        return;
+      }
+
+      const name = nameInput.value.trim();
+      const guessLocal = guessInput.value; // "YYYY-MM-DDTHH:mm"
+      if (!name || !guessLocal) return;
+
+      // Convert datetime-local to ISO by treating it as local time of the user's browser.
+      // (For Budapest users it matches nicely; otherwise it still records what they picked.)
+      const guessDate = new Date(guessLocal);
+
+      const vote = {
+        name,
+        guessIso: guessDate.toISOString(),
+        savedAtIso: new Date().toISOString(),
+        version: 1
+      };
+
+      const raw = JSON.stringify(vote);
+      try { localStorage.setItem(STORAGE_KEY, raw); } catch {}
+      setCookie(COOKIE_KEY, raw);
+
+      lockForm(vote);
+    });
+  </script>
+</body>
+</html>
