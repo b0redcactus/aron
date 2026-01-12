@@ -62,8 +62,8 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Áron utoljára ekkor látta a Keménymagot:</h1>
-    <p><strong>2025. dec. 18. 15:49</strong> (Europe/Budapest)</p>
+    <h1>Áron utoljára ekkor láttogatta a Keménymagot:</h1>
+    <p><strong>2025. dec. 18. 15:49</strong> </p>
 
     <div class="box" aria-live="polite">
       <div class="muted">Azóta eltelt idő:</div>
@@ -75,7 +75,7 @@
 
     <h1>Voks: mikor nézi meg újra?</h1>
     <p class="muted">
-      Add meg a neved és a tipped dátumát. Ugyanarról a böngészőről/eszközről csak egyszer lehet szavazni.
+      
     </p>
 
     <div class="box">
@@ -202,7 +202,7 @@
     if (existing && hasVoted()) {
       lockForm(existing);
     } else {
-      oneVoteNote.textContent = "Tippelj egyszer — utána lezárjuk a szavazást ezen az eszközön.";
+      oneVoteNote.textContent = "";
       // Default guess: today + 1 day at 18:00 (Budapest) - optional convenience
       const now = new Date();
       const defaultGuess = new Date(now.getTime() + 24 * 60 * 60 * 1000);
